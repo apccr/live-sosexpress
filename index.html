@@ -93,6 +93,7 @@ a, a:visited {
 	text-align: center;
 	z-index: 1;
 }
+
 		</style>
 		
 	</head>
@@ -129,7 +130,68 @@ const engine = new Engine(GODOT_CONFIG);
 window.touchEnabled = false;
 addEventListener("touchstart", () => {
 	window.touchEnabled = true;
-})	
+})
+
+(function setupVirtualKeyboard() {
+	const vkInput = document.getElementById('virtual-keyboard-input');
+	let pendingText = '';
+
+	window.godot_show_virtual_keyboard = function(existingText, cursorStart, cursorEnd, multiline, maxLength) {
+		if (!window.touchEnabled) return;
+		vkInput.value = existingText || '';
+		pendingText = existingText || '';
+		vkInput.style.pointerEvents = 'auto';
+		vkInput.focus();
+		try {
+			const start = (cursorStart >= 0) ? cursorStart : existingText.length;
+			const end   = (cursorEnd   >= 0) ? cursorEnd   : existingText.length;
+			vkInput.setSelectionRange(start, end);
+		} catch(e) {}
+		vkInput.style.pointerEvents = 'none';
+	};
+
+	window.godot_hide_virtual_keyboard = function() {
+		vkInput.blur();
+		vkInput.value = '';
+	};
+
+	vkInput.addEventListener('input', function(e) {
+		const newValue = vkInput.value;
+		if (newValue.length > pendingText.length) {
+			const added = newValue.slice(pendingText.length);
+			for (const ch of added) {
+				['keydown', 'keypress', 'keyup'].forEach(evType => {
+					const ev = new KeyboardEvent(evType, {
+						key: ch, code: 'Key' + ch.toUpperCase(),
+						charCode: ch.charCodeAt(0), keyCode: ch.charCodeAt(0),
+						which: ch.charCodeAt(0), bubbles: true, cancelable: true,
+					});
+					document.getElementById('canvas').dispatchEvent(ev);
+				});
+			}
+		} else if (newValue.length < pendingText.length) {
+			['keydown', 'keyup'].forEach(evType => {
+				const ev = new KeyboardEvent(evType, {
+					key: 'Backspace', code: 'Backspace',
+					keyCode: 8, which: 8, bubbles: true, cancelable: true,
+				});
+				document.getElementById('canvas').dispatchEvent(ev);
+			});
+		}
+		pendingText = newValue;
+	});
+
+	vkInput.addEventListener('keydown', function(e) {
+		if (e.key === 'Enter') {
+			const ev = new KeyboardEvent('keydown', {
+				key: 'Enter', code: 'Enter',
+				keyCode: 13, which: 13, bubbles: true, cancelable: true,
+			});
+			document.getElementById('canvas').dispatchEvent(ev);
+		}
+	});
+})();
+
 let initializeClicked = false;
 function initializeGodot() {
     if (initializeClicked) { return; }
